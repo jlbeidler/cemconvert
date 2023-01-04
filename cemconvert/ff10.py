@@ -11,6 +11,7 @@ class FF10:
     def __init__(self, opts):
         # Variable name to use in the FF10 pollutant field for the temporalizer
         self.temporalvar = opts.temporalvar
+        self.year = opts.year
         self.ann_cols = ('country_cd','region_cd','tribal_code','facility_id','unit_id','rel_point_id',
           'process_id','agy_facility_id','agy_unit_id','agy_rel_point_id','agy_process_id','scc','poll','ann_value',
           'ann_pct_red','facility_name','erptype','stkhgt','stkdiam','stktemp','stkflow','stkvel','naics',
@@ -57,7 +58,38 @@ class FF10:
         emis['unit_frac'] = emis['ann_value'] / emis['ann_value_unit']
         return emis[self.id_cols+['poll','ann_value','unit_frac']].copy()
 
-    def write_annual(self, fn, annual, ann_ff10, year):
+    def extract_monthly_emis(self, df):
+        '''
+        Extract monthly values at the specified level for scaling hourly values
+          Fill monthly from annual where necessary
+        '''
+        import calendar
+        emis = df[self.id_cols+['poll','ann_value']+self.month_vals].copy()
+        # Keep only those units with a valid boiler and facility
+        emis = emis[(emis['oris_facility_code'].notnull()) & \
+          (emis['oris_boiler_id'].notnull())].copy()
+        # Set aside those units with populated monthly values
+        idx = emis[self.month_vals].fillna(0).sum(axis=1) > 0
+        popmon = emis[idx].copy()
+        # Apply a flat ann->month profile to those remaining
+        emis = emis[~ idx].copy()
+        fracs = {vname: calendar.monthrange(int(self.year), mon+1)[1]/\
+          (365+calendar.isleap(int(self.year))) for mon, vname in enumerate(self.month_vals)}
+        for col, frac in fracs.items():
+            emis[col] = emis['ann_value'].fillna(0) * frac
+        emis = pd.concat((emis, popmon))
+        emis = emis[self.id_cols+['poll',]+self.month_vals].groupby(self.id_cols+['poll',], 
+          as_index=False).sum()
+        # Melt down to month number
+        emis = pd.melt(emis, id_vars=self.id_cols+['poll',], 
+          var_name='monthname', value_name='montot')
+        # Map months to month number
+        montab = pd.DataFrame(list(enumerate(self.month_vals)), columns=['month','monthname'])
+        montab['month'] = (montab['month'].astype(int) + 1).astype(str)
+        emis = emis[emis['montot'].notnull()].merge(montab, on='monthname', how='left')
+        return emis[self.id_cols+['month','poll','montot']].copy()
+
+    def write_annual(self, fn, annual, ann_ff10):
         '''
         Write the annual FF10
         Specify the output file name, 
@@ -83,7 +115,7 @@ class FF10:
         round_cols = ['ann_value','latitude','longitude']
         annual[round_cols] = annual[round_cols].round(8)
         with open(fn, 'w') as f:
-            head = '#FORMAT=FF10_POINT\n#COUNTRY=%s\n#YEAR=%s\n' %(country, year)
+            head = '#FORMAT=FF10_POINT\n#COUNTRY=%s\n#YEAR=%s\n' %(country, self.year)
             f.write(head)
             f.write('%s\n' %','.join(self.ann_cols))
             annual.to_csv(f, columns=self.ann_cols, index=False, quoting=csv.QUOTE_NONNUMERIC,

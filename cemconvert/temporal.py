@@ -4,10 +4,11 @@ class Temporal:
       to annual values
     '''
 
-    def __init__(self, opts):
+    def __init__(self, opts,
+          temporal_hierarchy = ['HTINPUT','GLOAD','SLOAD','NOX']):
         # Define the hierarchy of variables to pull activity for 
         #  temporalizing annual pollutants not in the CEM data
-        self.temporal_hierarchy = ['HTINPUT','GLOAD','SLOAD','NOX']
+        self.temporal_hierarchy = temporal_hierarchy
         # Variable name to use in the FF10 pollutant field for the temporalizer
         self.temporalvar = opts.temporalvar
         self.hrvals = ['hrval%s' %x for x in range(24)]
@@ -54,6 +55,7 @@ class Temporal:
         df['dayfrac'] = df['daytot'] / df['anntot']
         df[self.hrfracs] = df[self.hrvals].fillna(0).div(df.anntot, axis=0)
         df[['daytot','anntot'] + self.hrvals] = df[['daytot','anntot'] + self.hrvals].fillna(0)
+        df['month'] = df['month'].astype(int).astype(str)
         cols = self.unitids + ['month','date','dayfrac','daytot'] 
         df = df[cols+self.hrfracs+self.hrvals].groupby(cols, as_index=False).sum()
         return df

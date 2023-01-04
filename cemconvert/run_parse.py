@@ -32,7 +32,12 @@ class RunOpts(object):
           help='List of inventory pollutants to temporalize using the CEM activity', default='PM25-PRI')
         self.parser.add_option('-m', '--months', dest='months', default='',
           help='List of CEM months to process as a comma-delimited list of integers \
-           Default behavior is an annual run' )
+           Default behavior is an annual run')
+        self.parser.add_option('-l', '--label', dest='label', default='ptegu',
+          help='Output inventory label')
+        self.parser.add_option('-k', '--keep_annual', dest='keepann', action='store_true',
+          default=False, help='Keep and temporalize annual temporal values in FF10 that match CEMs.\
+            Default is to replace the emissions values with CEMs.')
         return self.parser.parse_args()
 
     def set_ev(self):
@@ -56,7 +61,7 @@ class RunOpts(object):
                 val = val.strip()
             if opt in int_list:
                 if val != '':
-                    val = int(val)
+                    val = [int(x) for x in val.strip().split(',')]
             elif opt in lower_list:
                 val = [col.strip() for col in val.lower().strip().split(',')]
             elif opt in upper_list:

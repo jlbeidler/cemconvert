@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 setup(
     name="cemconvert",
-    version="0.1.5",
+    version="0.3.0",
     packages=find_packages(),
     scripts = ['bin/cemconvert',],
     python_requires='>3.5',
